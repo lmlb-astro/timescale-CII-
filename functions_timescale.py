@@ -94,38 +94,52 @@ def get_max_diff(zi,min_intensity,maxDiffs,pixSize):
 
 
 ## Plot the intensity profiles
-def plot_intensity_profiles(zis,save_profiles):
+def plot_intensity_profiles(zis,save_profiles,path_profiles):
     for zi in zis:
         plt.plot(zi)
     plt.xlabel('distance (pixels)')
     plt.ylabel('T$_{mb}$ (K)')
     if(save_profiles):
-        plt.savefig('../plotsOutflow/cutProfiles/'+nameSource+'_intensity_profiles.pdf',dpi=300)
+        plt.savefig(path_profiles+nameSource+'_intensity_profiles.pdf',dpi=300)
     plt.show()
     plt.clf()
 
-
-## find size of the region along multiple cuts over the region
-def avSizeFromCuts(xb,xe,yb,ye,theta,numCuts_f,margin,min_intensity,dat,wcs_info,pixSize,nameSource,save_map,save_profiles):
-    zis = []
-    peakDiffs = []
-    maxDiffs = []
-    
-    ## calculate the angle associated with the upper east pixel in the map
-    x_cent = xb + 0.5*(xe-xb)
-    y_cent = yb + 0.5*(ye-yb)
-    mid_angle = np.arctan(y_cent/x_cent)
-    
-    ## start plotting the intensity map with the radial cuts on top of it
+## plot the cuts on the map
+def plot_cuts_on_map(xb, xe, yb, ye, x0s, x1s, y0s, y1s, dat, wcs_info, cmap_choice, save_map, nameSource, path_maps):
     plt.clf()
     fig, ax = plt.subplots()
     ax1 = fig.add_subplot(111, projection=wcs_info)
-    im = ax1.imshow(dat, origin='lower', vmin=0., cmap = 'jet')
+    im = ax1.imshow(dat, origin='lower', vmin=0., cmap = cmap_choice)
     
     plt.xlim([xb, xe])
     plt.ylim([yb, ye])
     plt.xlabel('RA [J2000]')
     plt.ylabel('DEC [J2000]')
+    
+    ## plot the axes
+    for x0, x1, y0, y1 in zip(x0s,x1s,y0s,y1s):
+        ax1.plot([x0, x1], [y0, y1], 'ro-')
+        
+    ## Finalize the plot of the map with the intensity cuts for the region
+    cbar = fig.colorbar(im)
+    cbar.set_label('$\int$T$_{mb}$dv (K km s$^{-1}$)', labelpad=15.,rotation=270.)
+    
+    ax.axis('off')
+    if(save_map):
+        plt.savefig(path_maps+nameSource+'integrated_map+cuts.pdf',dpi=300)
+    plt.show()
+    plt.clf()
+
+
+## find size of the region along multiple cuts over the region
+def getSizesFromCuts(xb,xe,yb,ye,theta,numCuts_f,margin,min_intensity,dat,wcs_info,pixSize,nameSource,save_map,save_profiles,cmap_choice, path_maps, path_profiles):
+    zis = []; peakDiffs = []; maxDiffs = []
+    x0s = []; x1s = []; y0s = []; y1s = []
+    
+    ## calculate the angle associated with the upper east pixel in the map
+    x_cent = xb + 0.5*(xe-xb)
+    y_cent = yb + 0.5*(ye-yb)
+    mid_angle = np.arctan(y_cent/x_cent)
 
     ## get the intensity cut and add it to the plot
     for i in range(0,numCuts_f):
@@ -135,6 +149,7 @@ def avSizeFromCuts(xb,xe,yb,ye,theta,numCuts_f,margin,min_intensity,dat,wcs_info
         
         ## get the x and y positions in the map for the cut
         x0, x1, y0, y1 = get_points_cuts(xb,xe,yb,ye,margin,x_cent,y_cent,a,angle_rad,mid_angle)
+        x0s.append(x0); x1s.append(x1); y0s.append(y0); y1s.append(y1)
         
         ## Extract the profiles from the data set
         num = int(2.*np.sqrt((x1-x0)**2 + (y1-y0)**2) + 0.5)
@@ -152,23 +167,11 @@ def avSizeFromCuts(xb,xe,yb,ye,theta,numCuts_f,margin,min_intensity,dat,wcs_info
         ## Estimate the size of the region along a specific axis based on the indices
         maxDiffs = get_max_diff(zi,min_intensity,maxDiffs,ind_len)
     
-        ax1.plot([x0, x1], [y0, y1], 'ro-')
-    
-    ## Verification
-    print(maxDiffs)
-    
-    ## Finalize the plot of the map with the intensity cuts for the region
-    cbar = fig.colorbar(im)
-    cbar.set_label('$\int$T$_{mb}$dv (K km s$^{-1}$)', labelpad=15.,rotation=270.)
-    
-    ax.axis('off')
-    if(save_map):
-        plt.savefig('../plotsOutflow/integratedMaps_cuts/'+nameSource+'integrated_map+cuts.pdf',dpi=300)
-    plt.show()
-    plt.clf()
+    ## plot the cuts onto the map
+    plot_cuts_on_map(xb, xe, yb, ye, x0s, x1s, y0s, y1s, dat, wcs_info, cmap_choice, save_map, nameSource, path_maps)
     
     ## Plot the intensity profiles associated with the cuts
-    plot_intensity_profiles(zis,save_profiles)
+    plot_intensity_profiles(zis,save_profiles, path_profiles)
     
     return 0.5*np.nanmean(maxDiffs), 0.5*np.nanstd(maxDiffs), 0.5*np.nanmean(peakDiffs), 0.5*np.nanstd(peakDiffs) ## Returns the radius (*0.5) + standard deviation
 
