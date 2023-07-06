@@ -20,6 +20,31 @@ def linFunc_noOff(beta, x):
     y = beta[0]*x
     return y
 
+## fit a linear function with offset to the give x, y data using ODR
+def fit_lin_func(list_x,list_y,err_x,err_y,init_guess,x_beg,x_end,num_x):
+    data = RealData(list_x,list_y,sx=err_x,sy=err_y)
+    linear = Model(linFunc)
+    odr = ODR(data,linear,beta0=init_guess)
+    output = odr.run()
+    output.pprint()
+    x = np.linspace(x_beg,x_end,num_x)
+    y = linFunc(output.beta, x)
+    
+    return x, y
+
+## fit a linear function with no offset to the give x, y data using ODR
+def fit_lin_func_no_offset(list_x,list_y,err_x,err_y,init_guess,x_beg,x_end,num_x):
+    data = RealData(list_x,list_y,sx=err_x,sy=err_y)
+    linear_no = Model(linFunc_noOff)
+    odr = ODR(data,linear_no,beta0=init_guess)
+    output = odr.run()
+    output.pprint()
+    x = np.linspace(x_beg,x_end,num_x)
+    y = linFunc_noOff(output.beta, x)
+    
+    return x, y
+
+
 ## Calculate the x and y positions in the map for the cut
 def get_points_cuts(xb,xe,yb,ye,margin,x_cent,y_cent,a,angle_rad,mid_angle):
     x0 = xb + margin
@@ -34,6 +59,23 @@ def get_points_cuts(xb,xe,yb,ye,margin,x_cent,y_cent,a,angle_rad,mid_angle):
         x1 = x_cent + (y1-y_cent)/a - margin
     return x0, x1, y0, y1
 
+## Estimate the size of the region along a specific axis based on the indices and peak emission
+def get_peak_diff(zi,min_intensity,peakDiffs,pixSize):
+    zi[zi<min_intensity] = 0.
+    midZi = int(0.5*len(zi) + 0.5)
+    arr1 = zi[0:midZi]
+    arr2 = zi[midZi:len(zi)]
+    try:
+        minInd = np.nanargmax(arr1)
+        maxInd = midZi + np.nanargmax(arr2)
+        if(zi[minInd]>min_intensity and zi[maxInd]>min_intensity):
+            peakDiffs.append((maxInd-minInd)*pixSize)
+        else:
+            print("Could not determine the size of the region along one axis")
+    except:
+        print("Not possible to estimate peak-based size along this axis")
+    return peakDiffs
+
 
 ## Estimate the (maximal) size of the region along a specific axis based on the indices
 def get_max_diff(zi,min_intensity,maxDiffs,pixSize):
@@ -46,7 +88,7 @@ def get_max_diff(zi,min_intensity,maxDiffs,pixSize):
         if(minInd<midZi and maxInd>midZi):
             maxDiffs.append((maxInd-minInd)*pixSize)
     except:
-        print("Not possible to estimate size along this axis")
+        print("Not possible to estimate the maximal size along this axis")
         #print("The available indices are: " + str(minInd) + " " + str(maxInd) + ", middle value is:" + str(midZi))
     return maxDiffs
 
@@ -63,9 +105,10 @@ def plot_intensity_profiles(zis,save_profiles):
     plt.clf()
 
 
-## find size of the region with different cuts
+## find size of the region along multiple cuts over the region
 def avSizeFromCuts(xb,xe,yb,ye,theta,numCuts_f,margin,min_intensity,dat,wcs_info,pixSize,nameSource,save_map,save_profiles):
     zis = []
+    peakDiffs = []
     maxDiffs = []
     
     ## calculate the angle associated with the upper east pixel in the map
@@ -95,12 +138,19 @@ def avSizeFromCuts(xb,xe,yb,ye,theta,numCuts_f,margin,min_intensity,dat,wcs_info
         
         ## Extract the profiles from the data set
         num = int(2.*np.sqrt((x1-x0)**2 + (y1-y0)**2) + 0.5)
+        cut_len = np.sqrt((x1-x0)**2 + (y1-y0)**2)*pixSize
+        ind_len = cut_len/num
         x, y = np.linspace(x0,x1,num), np.linspace(y0, y1, num)
+        
+        ## Extract the profiles from the data set
         zi = dat[y.astype(np.int)-yb, x.astype(np.int)-xb]
         zis.append(zi)
         
-        ## Estimate the (maximal) size of the region along a specific axis based on the indices
-        maxDiffs = get_max_diff(zi,min_intensity,maxDiffs,pixSize)
+        ## Estimate the size of the region along a specific axis based on the indices of the peak intensity position
+        peakDiffs = get_peak_diff(zi,min_intensity,peakDiffs,ind_len)
+        
+        ## Estimate the size of the region along a specific axis based on the indices
+        maxDiffs = get_max_diff(zi,min_intensity,maxDiffs,ind_len)
     
         ax1.plot([x0, x1], [y0, y1], 'ro-')
     
@@ -120,7 +170,7 @@ def avSizeFromCuts(xb,xe,yb,ye,theta,numCuts_f,margin,min_intensity,dat,wcs_info
     ## Plot the intensity profiles associated with the cuts
     plot_intensity_profiles(zis,save_profiles)
     
-    return 0.5*np.nanmean(maxDiffs), 0.5*np.nanstd(maxDiffs) ## Returns the radius (*0.5) + standard deviation
+    return 0.5*np.nanmean(maxDiffs), 0.5*np.nanstd(maxDiffs), 0.5*np.nanmean(peakDiffs), 0.5*np.nanstd(peakDiffs) ## Returns the radius (*0.5) + standard deviation
 
 
 ## Remove all the data from a 2D map that is not within the specified pixel locations
