@@ -9,6 +9,13 @@ import scipy.ndimage
 import random
 
 
+####
+## IN 'def getSizesFromCuts' THERE ARE A FEW HARD CODED VALUES THAT SHOULD BE ADAPTED
+## IN 'def plot_map' THERE ARE A FEW HARD CODED VALUES THAT SHOULD BE ADAPTED
+## INCLUDE CONVERGENCE VERIFICATION IN SINGLE FUNCTION 
+## PLOTTING ALSO IN SEPARATE FUNCTION, REDUCE COMPLEXITY OF THE LOOP
+
+
 #### DEFINE THE FUNCTIONS THAT WILL BE USED IN "calculateSizeAndTimescaleOfTheRegion.ipynb" ####
 
 ## define the linear functions for fitting
@@ -104,6 +111,35 @@ def plot_intensity_profiles(zis,save_profiles,path_profiles):
     plt.show()
     plt.clf()
 
+
+## plot the integrated intensity map
+def plot_map(xb, xe, yb, ye, dat, wcs_info, cmap_choice, save_map, nameSource, path_maps):
+    plt.clf()
+    fig, ax = plt.subplots()
+    ax1 = fig.add_subplot(111, projection=wcs_info)
+    im = ax1.imshow(dat, origin='lower', vmin=0., cmap = cmap_choice)
+    
+    ## add contour that defines the ring
+    ax1.contour(dat, levels = [400.], color = 'k')
+    
+    plt.xlim([xb, xe])
+    plt.ylim([yb, ye])
+    plt.xlabel('RA [J2000]')
+    plt.ylabel('DEC [J2000]')
+        
+    ## Finalize the plot of the map with the intensity cuts for the region
+    cbar = fig.colorbar(im)
+    cbar.set_label('$\int$T$_{mb}$dv (K km s$^{-1}$)', labelpad=15.,rotation=270.)
+    
+    ax.axis('off')
+    if(save_map):
+        plt.savefig(path_maps+nameSource+'integrated.pdf',dpi=300)
+    plt.show()
+    plt.clf()
+    
+
+    
+    
 ## plot the cuts on the map
 def plot_cuts_on_map(xb, xe, yb, ye, x0s, x1s, y0s, y1s, dat, wcs_info, cmap_choice, save_map, nameSource, path_maps):
     plt.clf()
@@ -158,7 +194,7 @@ def getSizesFromCuts(xb,xe,yb,ye,theta,numCuts_f,margin,min_intensity,dat,wcs_in
         x, y = np.linspace(x0,x1,num), np.linspace(y0, y1, num)
         
         ## Extract the profiles from the data set
-        zi = dat[y.astype(np.int)-yb, x.astype(np.int)-xb]
+        zi = dat[y.astype(np.int32)-yb, x.astype(np.int32)-xb]
         zis.append(zi)
         
         ## Estimate the size of the region along a specific axis based on the indices of the peak intensity position
@@ -167,7 +203,8 @@ def getSizesFromCuts(xb,xe,yb,ye,theta,numCuts_f,margin,min_intensity,dat,wcs_in
         ## Estimate the size of the region along a specific axis based on the indices
         maxDiffs = get_max_diff(zi,min_intensity,maxDiffs,ind_len)
     
-    ## plot the cuts onto the map
+    ## plot the integrated intensity map and the cuts onto the map
+    plot_map(xb, xe, yb, ye, dat, wcs_info, cmap_choice, True, nameSource, '../plotsOutflow/integrated_maps/')
     plot_cuts_on_map(xb, xe, yb, ye, x0s, x1s, y0s, y1s, dat, wcs_info, cmap_choice, save_map, nameSource, path_maps)
     
     ## Plot the intensity profiles associated with the cuts
